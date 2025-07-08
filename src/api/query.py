@@ -1,10 +1,9 @@
 from fastapi import APIRouter
-from src.api.models import QueryRequest, QueryResult
-from scr.api.db import query_documents
+from src.api.models import QueryRequest, QueryResult, QueryResponse
+from src.processing.rag import query_with_generation
 
 router = APIRouter()
 
-@router.post("/query", response_model=list[QueryResult])
+@router.post("/query", response_model=list[QueryResponse])
 async def query(req: QueryRequest):
-    results = query_documents(req.query)
-    return results
+    return [query_with_generation(req.query)]

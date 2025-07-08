@@ -10,7 +10,6 @@ import weaviate.classes.config as wc
 from weaviate import connect_to_custom
 from weaviate.connect import ConnectionParams
 from weaviate.classes.config import Property, Configure, DataType
-from uuid import uuid4
 import weaviate.exceptions
 
 
@@ -92,21 +91,29 @@ def list_documents(limit: int = 100):
 
 
 # ✅ Vector search
+# https://docs.weaviate.io/weaviate/tutorials/query
+# https://docs.weaviate.io/weaviate/api/graphql/search-operators
 def query_documents(vector: list[float], top_k: int = 5):
-    client = get_client()
+    client = get_client()  # assuming you have a helper like this
     try:
-        result = client.query.get("Document", ["text"]).with_near_vector({
-            "vector": vector
-        }).with_limit(top_k).with_additional("distance").do()
+        doc_collection = client.collections.get("Document")
+        #results = doc_collection.query.near_vector(near_vector=vector,limit=top_k,return_properties=["text"],).with_additional("distance")
+        
+        #results = doc_collection.query.near_vector(vector).with_limit(top_k).with_fetch_vector().do()
+        print("NEAR VECTOR TYPE")
+        #print(type(doc_collection.query.near_vector(vector)))
+        results = doc_collection.query.near_vector(near_vector = vector, limit = top_k, distance = 0.7) #.with_limit(top_k).with_additional(["distance"]).with_fields(["text"]).do()
 
         return [
             {
-                "id": doc["_additional"]["id"],
-                "text": doc["text"],
-                "score": 1.0 - doc["_additional"]["distance"]
+                "id": obj.uuid,
+                "text": obj.properties["text"],
+                "score": 1.0 - obj.metadata.distance if obj.metadata.distance is not None else 0.0  # convert distance to similarity
             }
-            for doc in result["data"]["Get"]["Document"]
-        ]
+            for obj in results.objects
+            ]
     finally:
         client.close()
 
+def retrieve_docs(vector: list[float], top_k: int = 5):
+    return query_documents(vector, top_k=top_k)
