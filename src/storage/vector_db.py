@@ -1,36 +1,48 @@
-from uuid import uuid4
 from weaviate import connect_to_custom
 from weaviate.connect import ConnectionParams
+#from weaviate.collections.classes.config import Property, VectorIndexConfig, Vectorizer
+from weaviate.classes.config import Property
+from weaviate.classes.config import Configure
+from uuid import uuid4
+from weaviate import connect_to_custom, ConnectionParams
+import weaviate.classes.config as wc
+
 
 # https://weaviate-python-client.readthedocs.io/en/stable/weaviate.connect.html#weaviate.connect.ConnectionParams
 # https://weaviate-python-client.readthedocs.io/en/stable/weaviate.html#module-weaviate.config
 # yes - https://weaviate-python-client.readthedocs.io/en/stable/weaviate.connect.html#weaviate.connect.ConnectionParams
 
 
-client = connect_to_custom(
-    http_host="localhost",
-    http_port=8080,
-    http_secure=False,
-    grpc_host="localhost",
-    grpc_port=50051,
-    grpc_secure=False,
-    skip_init_checks=True
-)
-
-
-# Ensure the class exists
 def init_schema():
-    if not client.schema.contains({"classes": [{"class": "Document"}]}):
-        client.schema.create_class({
-            "class": "Document",
-            "properties": [
-                {
-                    "name": "text",
-                    "dataType": ["text"]
-                }
-            ],
-            "vectorizer": "none"  # You provide vectors manually
-        })
+    client = connect_to_custom(
+        http_host="localhost",
+        http_port=8080,
+        http_secure=False,
+        grpc_host="localhost",
+        grpc_port=50051,
+        grpc_secure=False,
+        skip_init_checks=True
+    )
+    try:
+        if "Document" not in client.collections.list_all():
+            client.collections.create(
+                name="Document",
+                description="Stores ingested document chunks",
+                vectorizer_config=None,
+                properties=[
+                    wc.Property(
+                        name="text",
+                        data_type=wc.DataType.TEXT,
+                        description="Chunked text",
+                        skip_vectorization=True
+                    ),
+                    # Add more fields here if needed, e.g.:
+                    # wc.Property(name="source", data_type=wc.DataType.TEXT)
+                ],
+                vector_index_config=wc.Configure.VectorIndex.hnsw(),  # default HNSW settings
+            )
+    finally:
+        client.close()
 
 init_schema()
 
