@@ -1,3 +1,12 @@
+## TO DO:
+
+- Search - should be hybrid - vector and keyword/BM25 - DONE
+- Parsing of different documents - DONE
+- Batch processing
+- Similarity threshold - DONE - in function
+- Deployment
+
+
 This needs to be loaded first.
 
 import nltk

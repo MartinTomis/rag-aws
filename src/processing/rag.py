@@ -31,12 +31,12 @@ def generate_answer(query: str, context_chunks: list[str]) -> str:
 
 def query_with_generation(query: str, top_k: int = 5) -> dict:
     query_vector = embed_texts([query])[0]  # Convert query to vector
-    results = retrieve_docs(query_vector, top_k=top_k)
+    results = retrieve_docs(query, query_vector, top_k=top_k)
     context_chunks = [doc["text"] for doc in results]
     answer = generate_answer(query, context_chunks)
     return {
         "answer": answer,
-        "sources": results
+        "sources": [doc["text"] for doc in results] 
     }
 
 

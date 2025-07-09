@@ -77,23 +77,39 @@ def delete_document(doc_id: str) -> bool:
         client.close()
 
 
-# ✅ List documents
 def list_documents(limit: int = 100):
-    client = get_client()
+    client = get_client()  # This returns a full Weaviate client, not just the collection
     try:
-        result = client.query.get("Document", ["text"]).with_limit(limit).do()
+        doc_collection = client.collections.get("Document")
+        results = doc_collection.query.fetch_objects(limit=limit)
+
         return [
-            {"id": obj["_additional"]["id"], "text": obj["text"]}
-            for obj in result["data"]["Get"]["Document"]
+            {
+                "id": obj.uuid,
+                "text": obj.properties.get("text", ""),
+                "metadata": {
+                    k: v for k, v in obj.properties.items() if k != "text"
+                }
+            }
+            for obj in results.objects
         ]
     finally:
         client.close()
 
 
-# ✅ Vector search
+
 # https://docs.weaviate.io/weaviate/tutorials/query
 # https://docs.weaviate.io/weaviate/api/graphql/search-operators
-def query_documents(vector: list[float], top_k: int = 5):
+# https://docs.weaviate.io/weaviate/api/graphql/search-operators#hybrid
+'''
+alpha can be any number from 0 to 1, defaulting to 0.75.
+alpha = 0 forces using a pure keyword search method (BM25)
+alpha = 1 forces using a pure vector search method
+alpha = 0.5 weighs the BM25 and vector methods evenly
+
+'''
+# https://docs.weaviate.io/weaviate/api/graphql/additional-properties
+def query_documents(query: str, vector: list[float], top_k: int = 5,min_score: float = 0.5):
     client = get_client()  # assuming you have a helper like this
     try:
         doc_collection = client.collections.get("Document")
@@ -101,8 +117,11 @@ def query_documents(vector: list[float], top_k: int = 5):
         
         #results = doc_collection.query.near_vector(vector).with_limit(top_k).with_fetch_vector().do()
         print("NEAR VECTOR TYPE")
-        #print(type(doc_collection.query.near_vector(vector)))
-        results = doc_collection.query.near_vector(near_vector = vector, limit = top_k, distance = 0.7) #.with_limit(top_k).with_additional(["distance"]).with_fields(["text"]).do()
+
+
+        #results = doc_collection.query.near_vector(near_vector = vector, limit = top_k, distance = 0.7)
+        ### Hybrid
+        results = doc_collection.query.hybrid(query = query,  vector = vector, limit = top_k, alpha = 0.7)
 
         return [
             {
@@ -110,10 +129,10 @@ def query_documents(vector: list[float], top_k: int = 5):
                 "text": obj.properties["text"],
                 "score": 1.0 - obj.metadata.distance if obj.metadata.distance is not None else 0.0  # convert distance to similarity
             }
-            for obj in results.objects
+            for obj in results.objects if (getattr(obj.metadata, "score", 0.0) or 0.0) >= min_score
             ]
     finally:
         client.close()
 
-def retrieve_docs(vector: list[float], top_k: int = 5):
-    return query_documents(vector, top_k=top_k)
+def retrieve_docs(query: str, vector: list[float], top_k: int = 5, min_score: float = 0.5):
+    return query_documents(query, vector, top_k=top_k, min_score = min_score)
