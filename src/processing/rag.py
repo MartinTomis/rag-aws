@@ -51,14 +51,15 @@ def chunk_text(text: str, strategy: str = "fixed", **kwargs) -> list[str]:
     else:
         raise ValueError(f"Unknown chunking strategy: {strategy}")
 
-def ingest_document(text: str, strategy: str = "fixed", chunk_args: Optional[Dict] = None) -> List[str]:
+def ingest_document(text: str, strategy: str = "fixed", chunk_args: Optional[Dict] = None,doc_name: str = None) -> List[str]:
     chunk_args = chunk_args or {}  # Safely handle default
     chunks = chunk_text(text, strategy, **chunk_args)
     embeddings = embed_texts(chunks)
     doc_ids = []
 
     for chunk, vector in zip(chunks, embeddings):
-        doc_id = add_document(chunk, vector)  # Stores in Weaviate
+        metadata = {"document_name": doc_name} if doc_name else {}
+        doc_id = add_document(chunk, vector, metadata)  # Stores in Weaviate
         doc_ids.append(doc_id)
 
     return doc_ids

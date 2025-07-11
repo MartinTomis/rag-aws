@@ -1,0 +1,27 @@
+{
+  "family": "weaviate-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::161015140575:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "weaviate",
+      "image": "semitechnologies/weaviate:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" },
+        { "containerPort": 50051, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "QUERY_DEFAULTS_LIMIT", "value": "25" },
+        { "name": "AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED", "value": "true" },
+        { "name": "PERSISTENCE_DATA_PATH", "value": "./weaviate_data" },
+        { "name": "DEFAULT_VECTORIZER_MODULE", "value": "none" },
+        { "name": "ENABLE_MODULES", "value": "text2vec-openai" },
+        { "name": "ENABLE_GRPC", "value": "true" }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ async def ingest(
 
     if file:
         suffix = Path(file.filename).suffix
+        doc_name = Path(file.filename).name
         try:
             with NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp.write(await file.read())
@@ -35,5 +36,5 @@ async def ingest(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid 'chunk_args' JSON.")
 
-    doc_ids = ingest_document(text, strategy, chunk_args_dict)
+    doc_ids = ingest_document(text, strategy, chunk_args_dict,doc_name=doc_name)
     return {"status": "success", "chunks": len(doc_ids), "ids": doc_ids}

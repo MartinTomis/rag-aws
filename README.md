@@ -4,7 +4,54 @@
 - Parsing of different documents - DONE
 - Batch processing
 - Similarity threshold - DONE - in function
+- metadata - Name in the file, name of the file, topics
+- metadata filtering and Faceted search (or faceted navigation) provides users with filterable categories (facets) to refine search results interactively.
+### logging and correlation ID - middleware.
+```
+import uuid
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+        request.state.correlation_id = correlation_id
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
+```
+```
+app.add_middleware(CorrelationIdMiddleware)
+```
+```
+import logging
+
+logger = logging.getLogger("app")
+
+def log_with_correlation_id(request, msg):
+    logger.info(f"[{request.state.correlation_id}] {msg}")
+```
+
+```
+
+from pythonjsonlogger import jsonlogger
+
+handler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+```
+
+
+### database migrations and schema management
+```
+client.schema.update_property("Document", {
+  "name": "document_name",
+  "dataType": ["text"]
+})
+```
 - Deployment
+
 
 
 This needs to be loaded first.
@@ -39,3 +86,176 @@ Edit
 @app.on_event("startup")
 def on_startup():
     init_schema()
+
+
+
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 161015140575.dkr.ecr.eu-central-1.amazonaws.com
+
+docker tag rag-aws-container:first 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
+
+docker push 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
+
+
+aws configure set region eu-central-1
+
+aws ecs create-cluster --cluster-name rag-ecs-cluster-1
+
+aws iam create-role \
+  --role-name ecsTaskExecutionRole \
+  --assume-role-policy-document file://deployment/ecs-trust-policy.json
+
+
+aws iam attach-role-policy \
+  --role-name ecsTaskExecutionRole \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+
+aws ecs register-task-definition --cli-input-json file://deployment/weaviate-task.json
+aws ecs register-task-definition --cli-input-json file://deployment/rag-task.json
+
+aws ec2 describe-vpcs
+aws ec2 describe-subnets
+aws ec2 describe-security-groups
+
+# Replace subnet-xxxx and sg-yyyy with actual IDs
+
+aws ec2 describe-subnets \
+  --query "Subnets[*].{ID:SubnetId,AZ:AvailabilityZone,Default:DefaultForAz}" \
+  --output table
+
+aws ec2 describe-vpcs --query "Vpcs[*].{ID:VpcId,CIDR:CidrBlock}" --output table
+
+
+aws ec2 create-security-group \
+  --group-name rag-sg \
+  --description "Security group for RAG ECS Fargate" \
+  --vpc-id vpc-d2c139bb
+
+
+
+aws ecs create-service \
+  --cluster rag-ecs-cluster-1 \
+  --service-name weaviate-service \
+  --task-definition weaviate-task \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration 'awsvpcConfiguration={subnets=["subnet-93e22ffa"],securityGroups=["sg-09c634a7064f19396"],assignPublicIp="ENABLED"}'
+
+aws ecs create-service \
+  --cluster rag-ecs-cluster-1 \
+  --service-name rag-app-service \
+  --task-definition rag-task \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration 'awsvpcConfiguration={subnets=["subnet-93e22ffa"],securityGroups=["sg-09c634a7064f19396"],assignPublicIp="ENABLED"}'
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service rag-app-service \
+  --task-definition arn:aws:ecs:eu-central-1:161015140575:task-definition/rag-task:10 \
+  --enable-execute-command \
+  --force-new-deployment
+
+
+
+
+curl http://ec2-18-153-79-61.eu-central-1.compute.amazonaws.com:8000/health
+
+http://ec2-3-79-63-33.eu-central-1.compute.amazonaws.com:8000/docs
+http://ec2-18-153-79-61.eu-central-1.compute.amazonaws.com:8000/docs
+
+aws ec2 describe-security-groups --group-ids sg-09c634a7064f19396
+
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-09c634a7064f19396 \
+  --protocol tcp \
+  --port 8000 \
+  --cidr 0.0.0.0/0
+
+
+
+  aws ecs describe-tasks \
+  --cluster rag-ecs-cluster-1 \
+  --tasks <your-task-id>
+
+
+  aws ecs execute-command \
+  --cluster rag-ecs-cluster-1 \
+  --task f575385a116f4e6f96d8b6b28ec59e0d \
+  --container rag-aws-container \
+  --command "/bin/sh" \
+  --interactive
+
+### Test v RAG
+  python3 -c "import requests; r = requests.get('http://weaviate.myapp.local:8080/v1'); print(r.status_code, r.text)"
+
+### Test v Weaviate
+python3 -c "import requests; print(requests.get('http://localhost:8080/v1').json())"
+
+
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service rag-app-service \
+  --force-new-deployment
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service your-service-name \
+  --force-new-deployment
+
+
+
+curl http://weaviate.myapp.local:8080/v1
+
+
+
+## Enabling ECS EXEC pro weaviate
+
+### First task revision with new role - in console, add as Task Role the ecsTaskExecutionRole
+### Deploy the revision to service 
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service weaviate-service \
+  --task-definition weaviate-task:5 \
+  --enable-execute-command \
+  --force-new-deployment
+
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service weaviate-service \
+  --enable-execute-command
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service weaviate-service \
+  --force-new-deployment
+
+aws ecs execute-command \
+  --cluster rag-ecs-cluster-1 \
+  --task 2278e76fa55e483ea981e58affd474d7 \
+  --container weaviate \
+  --command "/bin/sh" \
+  --interactive
+
+
+  aws ecs list-tasks \
+  --cluster rag-ecs-cluster-1 \
+  --service-name weaviate-service
+
+
+  aws ecs describe-tasks \
+  --cluster rag-ecs-cluster-1 \
+  --tasks c04ad13cf0f94ce78d1666bb316eec39
+
+c04ad13cf0f94ce78d1666bb316eec39
+
+
+
+
+Qs:
+- In container definition under task definition, I see "Port name": weaviate-8080-tcp, "Host Port:Container Port": weaviate-8080-tcp and protocol tcp
+- When I do getent hosts weaviate.myapp.local, I get 172.31.24.88    weaviate.myapp.local. But I get error after : python3 -c "import requests; r = requests.get('http://weaviate.myapp.local:8080/v1'); print(r.status_code)"
+- When defining the inbound rules, how should I define security group of my rag as the source? Should I use private IP?
+

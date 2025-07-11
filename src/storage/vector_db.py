@@ -6,7 +6,7 @@ from weaviate.classes.config import Configure
 from uuid import uuid4
 from weaviate import connect_to_custom, ConnectionParams
 import weaviate.classes.config as wc
-
+import os
 from weaviate import connect_to_custom
 from weaviate.connect import ConnectionParams
 from weaviate.classes.config import Property, Configure, DataType
@@ -16,18 +16,22 @@ import weaviate.exceptions
 # ✅ Create a reusable connection factory
 def get_client():
     return connect_to_custom(
-        http_host="localhost",
-        http_port=8080,
+
+        http_host = os.getenv("WEAVIATE_HTTP_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost"),
+        http_port=int(os.getenv("WEAVIATE_HTTP_PORT", 8080)),
+        grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost"),
+        grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT", 50051)),
         http_secure=False,
-        grpc_host="localhost",
-        grpc_port=50051,
         grpc_secure=False,
         skip_init_checks=True,
+
     )
 
 
 # ✅ Init schema
 def init_schema():
+    
+
     client = get_client()
     try:
         if "Document" not in client.collections.list_all():
@@ -48,24 +52,20 @@ def init_schema():
     finally:
         client.close()
 
-
-# ✅ Add document
-def add_document(text: str, vector: list[float]) -> str:
+def add_document(text: str, vector: list[float],  metadata: dict = None) -> str:
     doc_id = str(uuid4())
     client = get_client()
     try:
-        client.collections.get("Document").data.insert(
-            properties={"text": text},
-            vector=vector,
-            uuid=doc_id,
-        )
+        doc_collection = client.collections.get("Document")
+        properties = {"text": text}
+        if metadata:
+            properties.update(metadata)
+        obj = doc_collection.data.insert(properties=properties, vector=vector)
         return doc_id
     finally:
         client.close()
 
 
-
-# ✅ Delete document
 def delete_document(doc_id: str) -> bool:
     client = get_client()
     try:
@@ -87,8 +87,9 @@ def list_documents(limit: int = 100):
             {
                 "id": obj.uuid,
                 "text": obj.properties.get("text", ""),
+                "document_name": obj.properties.get("document_name", "unknown"),
                 "metadata": {
-                    k: v for k, v in obj.properties.items() if k != "text"
+                    k: v for k, v in obj.properties.items() if k != "text" and k != "document_name"
                 }
             }
             for obj in results.objects

@@ -1,0 +1,22 @@
+{
+  "family": "rag-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::161015140575:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "rag-aws-container",
+      "image": "161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "WEAVIATE_HTTP_HOST", "value": "weaviate.myapp.local" },
+        { "name": "WEAVIATE_HTTP_PORT", "value": "8080" }
+      ]
+    }
+  ]
+}
