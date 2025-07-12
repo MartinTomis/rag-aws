@@ -13,20 +13,31 @@ from weaviate.classes.config import Property, Configure, DataType
 import weaviate.exceptions
 
 
-# ✅ Create a reusable connection factory
-def get_client():
-    return connect_to_custom(
 
-        http_host = os.getenv("WEAVIATE_HTTP_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost"),
-        http_port=int(os.getenv("WEAVIATE_HTTP_PORT", 8080)),
-        grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost"),
-        grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT", 50051)),
+def get_client():
+    http_host = os.getenv("WEAVIATE_HTTP_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost")
+    http_port=int(os.getenv("WEAVIATE_HTTP_PORT", 8080))
+    grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate.myapp.local" if os.getenv("IN_DOCKER") else "localhost")
+    #grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate")
+    grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT", 50051))
+    #http_host = os.getenv("WEAVIATE_HTTP_HOST", "localhost")
+    #http_port = os.getenv("WEAVIATE_HTTP_PORT", "8080")
+    #grpc_host = os.getenv("WEAVIATE_GRPC_HOST", http_host)
+    #grpc_port = os.getenv("WEAVIATE_GRPC_PORT", "50051")
+
+    print("Connecting to Weaviate at:")
+    print(f"  HTTP: http://{http_host}:{http_port}")
+    print(f"  gRPC: {grpc_host}:{grpc_port}")
+
+    return connect_to_custom(
+        http_host=http_host,
+        http_port=int(http_port),
+        grpc_host=grpc_host,
+        grpc_port=int(grpc_port),
         http_secure=False,
         grpc_secure=False,
-        skip_init_checks=True,
-
+        skip_init_checks=True
     )
-
 
 # ✅ Init schema
 def init_schema():

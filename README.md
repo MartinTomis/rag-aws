@@ -87,13 +87,46 @@ Edit
 def on_startup():
     init_schema()
 
-
-
+# Set Region
+aws configure set region eu-central-1
+# Authenticate (if needed)
 aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 161015140575.dkr.ecr.eu-central-1.amazonaws.com
 
+docker build -t rag-aws-container:first .
+# Tag image
 docker tag rag-aws-container:first 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
 
+# Push image
 docker push 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
+
+# Register the tasks
+aws ecs register-task-definition --cli-input-json file://deployment/weaviate-task.json
+aws ecs register-task-definition --cli-input-json file://deployment/rag-task.json
+
+# Update service
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service rag-app-service \
+  --task-definition rag-task
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service weaviate-service \
+  --task-definition weaviate-task
+
+# Force new deployment
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service rag-app-service \
+  --force-new-deployment
+
+aws ecs update-service \
+  --cluster rag-ecs-cluster-1 \
+  --service weaviate-service \
+  --force-new-deployment
+
+
+
 
 
 aws configure set region eu-central-1
@@ -108,6 +141,10 @@ aws iam create-role \
 aws iam attach-role-policy \
   --role-name ecsTaskExecutionRole \
   --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+aws iam attach-role-policy \
+  --role-name ecsTaskExecutionRole \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonSSMManagedInstanceCore
 
 
 aws ecs register-task-definition --cli-input-json file://deployment/weaviate-task.json
@@ -130,6 +167,24 @@ aws ec2 create-security-group \
   --group-name rag-sg \
   --description "Security group for RAG ECS Fargate" \
   --vpc-id vpc-d2c139bb
+
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-09c634a7064f19396 \
+  --protocol tcp \
+  --port 8080 \
+  --source-group sg-09c634a7064f19396
+
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-09c634a7064f19396 \
+  --protocol tcp \
+  --port 50051 \
+  --source-group sg-09c634a7064f19396
+
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-09c634a7064f19396 \
+  --protocol tcp \
+  --port 8000 \
+  --cidr 0.0.0.0/0
 
 
 
@@ -179,17 +234,27 @@ aws ec2 authorize-security-group-ingress \
   --tasks <your-task-id>
 
 
-  aws ecs execute-command \
+
+
+### Test v RAG
+aws ecs execute-command \
   --cluster rag-ecs-cluster-1 \
-  --task f575385a116f4e6f96d8b6b28ec59e0d \
+  --task 1f597abf946f47cb9cc3ac5ebb95e7ca \
   --container rag-aws-container \
   --command "/bin/sh" \
   --interactive
 
-### Test v RAG
-  python3 -c "import requests; r = requests.get('http://weaviate.myapp.local:8080/v1'); print(r.status_code, r.text)"
+
+python3 -c "import requests; r = requests.get('http://weaviate.myapp.local:8080/v1'); print(r.status_code, r.text)"
 
 ### Test v Weaviate
+aws ecs execute-command \
+  --cluster rag-ecs-cluster-1 \
+  --task f30005e5cd08410998357f5af0bed909 \
+  --container weaviate \
+  --command "/bin/sh" \
+  --interactive
+
 python3 -c "import requests; print(requests.get('http://localhost:8080/v1').json())"
 
 
@@ -208,7 +273,7 @@ aws ecs update-service \
 
 curl http://weaviate.myapp.local:8080/v1
 
-
+## model refresh
 
 ## Enabling ECS EXEC pro weaviate
 
@@ -259,3 +324,4 @@ Qs:
 - When I do getent hosts weaviate.myapp.local, I get 172.31.24.88    weaviate.myapp.local. But I get error after : python3 -c "import requests; r = requests.get('http://weaviate.myapp.local:8080/v1'); print(r.status_code)"
 - When defining the inbound rules, how should I define security group of my rag as the source? Should I use private IP?
 
+docker system prune -a

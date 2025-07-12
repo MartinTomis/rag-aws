@@ -5,6 +5,7 @@
   "cpu": "512",
   "memory": "1024",
   "executionRoleArn": "arn:aws:iam::161015140575:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::161015140575:role/ecsTaskExecutionRole",
   "containerDefinitions": [
     {
       "name": "rag-aws-container",
@@ -13,9 +14,20 @@
       "portMappings": [
         { "containerPort": 8000, "protocol": "tcp" }
       ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/rag-task", 
+          "awslogs-region": "eu-central-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
       "environment": [
         { "name": "WEAVIATE_HTTP_HOST", "value": "weaviate.myapp.local" },
-        { "name": "WEAVIATE_HTTP_PORT", "value": "8080" }
+        { "name": "WEAVIATE_HTTP_PORT", "value": "8080" },
+        {"name": "WEAVIATE_GRPC_HOST", "value": "weaviate.myapp.local"},
+        {"name": "WEAVIATE_GRPC_PORT","value": "50051"},
+        {"name": "IN_DOCKER", "value": "1"}
       ]
     }
   ]
