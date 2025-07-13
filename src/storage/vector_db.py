@@ -1,8 +1,12 @@
 from weaviate import connect_to_custom
 from uuid import uuid4
 import os
+from typing import Optional, List
 import weaviate.classes as wvc
+
+#from weaviate.collections.classes.filters import Filter
 import weaviate.exceptions
+from fastapi import HTTPException
 
 
 
@@ -52,6 +56,18 @@ def init_schema():
                 ],
                 vector_index_config=wvc.config.Configure.VectorIndex.hnsw(),
             )
+        
+        # Populate "Topic" at initialialization
+        topic_collection = client.collections.get("Topic")
+        existing = topic_collection.query.fetch_objects(limit=1)
+        if not existing.objects:
+            with open("weaviate_data/topics_list.txt", "r") as f:
+                topics = [line.strip() for line in f if line.strip()]
+            for topic in topics:
+                topic_collection.data.insert(properties={"name": topic})
+            print(f"Initialized Topic collection with {len(topics)} topics.")
+        else:
+            print("Topic collection already initialized.")
     finally:
         client.close()
 
@@ -69,28 +85,85 @@ def add_document(text: str, vector: list[float],  metadata: dict = None) -> str:
         client.close()
 
 
+# https://docs.weaviate.io/weaviate/manage-objects/delete
 def delete_document(doc_id: str) -> bool:
     client = get_client()
     try:
-        client.data_object.delete(uuid=doc_id, class_name="Document")
+        collection = client.collections.get("Document")
+        collection.data.delete_by_id(uuid=doc_id)
         return True
-    except weaviate.exceptions.ObjectNotFoundException:
-        return False
+    except weaviate.exceptions.UnexpectedStatusCodeException as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error while deleting document: {e.message}"
+        )
+    finally:
+        client.close()
+
+#https://docs.weaviate.io/weaviate/manage-objects/delete
+def delete_documents_by_name(doc_name: str) -> int:
+    client = get_client()
+    total_deleted = 0
+    try:
+        collection = client.collections.get("Document")
+
+        filter_obj= wvc.query.Filter.by_property("document_name").equal(doc_name)
+        while True:
+            result = collection.data.delete_many(where=filter_obj)
+            deleted_count = result.matches
+            total_deleted += deleted_count
+            if deleted_count < 25:
+                break  # No more matches
+
+        return total_deleted 
+    except weaviate.exceptions.UnexpectedStatusCodeException as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error while deleting document: {e.message}"
+        )
     finally:
         client.close()
 
 
-def list_documents(limit: int = 100):
+def load_known_topics() -> list[str]:
+    client = get_client()
+    try:
+        if "Topic" not in client.collections.list_all():
+            return []
+        topic_collection = client.collections.get("Topic")
+        results = topic_collection.query.fetch_objects(limit=500)
+        return [obj.properties["name"] for obj in results.objects]
+    finally:
+        client.close()
+
+def add_new_topic(topic: str):
+    known_topics = load_known_topics()
+    if topic in known_topics:
+        return
+    client = get_client()
+    try:
+        topic_collection = client.collections.get("Topic")
+        topic_collection.data.insert(properties={"name": topic})
+    finally:
+        client.close()
+
+# https://docs.weaviate.io/weaviate/search/filters
+def list_documents(topics: Optional[List[str]] = None, limit: int = 100):
     client = get_client()
     try:
         doc_collection = client.collections.get("Document")
-        results = doc_collection.query.fetch_objects(limit=limit)
+        if topics:
+            results = doc_collection.query.fetch_objects(
+                limit=limit,
+                filters= wvc.query.Filter.by_property("topics").contains_any(topics))
+        else: results = doc_collection.query.fetch_objects(limit=limit)
 
         return [
             {
                 "id": obj.uuid,
                 "text": obj.properties.get("text", ""),
                 "document_name": obj.properties.get("document_name", "unknown"),
+                "topics": obj.properties.get("topics", "unknown"),
                 "metadata": {
                     k: v for k, v in obj.properties.items() if k != "text" and k != "document_name"
                 }
@@ -109,12 +182,27 @@ alpha = 1 forces using a pure vector search method
 alpha = 0.5 weighs the BM25 and vector methods evenly
 
 '''
-def query_documents(query: str, vector: list[float], top_k: int = 5, alpha: float = 0.7, min_score: float = 0.5):
+def query_documents(query: str, vector: list[float], top_k: int = 5, alpha: float = 0.7, min_score: float = 0.5,topics: Optional[List[str]] = None):
     client = get_client() 
     try:
         doc_collection = client.collections.get("Document")
         ### Hybrid
-        results = doc_collection.query.hybrid(query = query,  vector = vector, limit = top_k, alpha = alpha,return_metadata=wvc.query.MetadataQuery(score=True, explain_score=True))
+        if topics:
+            results = doc_collection.query.hybrid(
+                query = query,  
+                vector = vector, 
+                limit = top_k, 
+                alpha = alpha,
+                filters = wvc.query.Filter.by_property("topics").contains_any(topics),
+                return_metadata=wvc.query.MetadataQuery(score=True, explain_score=True))
+        else:
+            results = doc_collection.query.hybrid(
+                query = query,  
+                vector = vector, 
+                limit = top_k, 
+                alpha = alpha,
+                return_metadata=wvc.query.MetadataQuery(score=True, explain_score=True))
+
 
         return [
             {

@@ -1,5 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import Optional
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from typing import Optional, List
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 import json
@@ -14,8 +14,8 @@ async def ingest(
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     strategy: str = Form("fixed"),
-    chunk_args: str = Form("{}")
-):
+    chunk_args: str = Form("{}"),
+    new_topics: Optional[List[str]] = Query(None)):
     if not text and not file:
         raise HTTPException(status_code=400, detail="Either 'text' or 'file' must be provided.")
 
@@ -36,5 +36,5 @@ async def ingest(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid 'chunk_args' JSON.")
 
-    doc_ids = ingest_document(text, strategy, chunk_args_dict,doc_name=doc_name)
+    doc_ids = ingest_document(text, strategy, chunk_args_dict,doc_name=doc_name, new_topics= new_topics)
     return {"status": "success", "chunks": len(doc_ids), "ids": doc_ids}

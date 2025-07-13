@@ -1,9 +1,10 @@
 from src.processing.chunking import fixed_size_chunk, sentence_chunk, sliding_window_chunk
 from src.processing.embedding import embed_texts
-from src.storage.vector_db import add_document
+from src.storage.vector_db import add_document, load_known_topics,add_new_topic
 from typing import List, Dict, Optional
 from src.storage.vector_db import query_documents as retrieve_docs
 from dotenv import load_dotenv
+from typing import Optional, List
 import os
 load_dotenv()  # This will load variables from .env into os.environ
 from openai import AzureOpenAI
@@ -28,9 +29,9 @@ def generate_answer(query: str, context_chunks: list[str]) -> str:
 
 
 
-def query_with_generation(query: str, top_k: int = 5, alpha : float = 0.7, min_score: float = 0.5 ) -> dict:
+def query_with_generation(query: str, top_k: int = 5, alpha : float = 0.7, min_score: float = 0.5,topics: Optional[List[str]] = None ) -> dict:
     query_vector = embed_texts([query])[0]  # Convert query to vector
-    results = retrieve_docs(query, query_vector, top_k=top_k, alpha = alpha,  min_score = min_score)
+    results = retrieve_docs(query, query_vector, top_k=top_k, alpha = alpha,  min_score = min_score, topics = topics)
     context_chunks = [doc["text"] for doc in results]
     scores = [doc["score"] for doc in results]
     document_names = [doc["document_name"] for doc in results]
@@ -86,14 +87,25 @@ def generate_metadata(text: str, possible_topics: list[str]) -> list[str]:
         return []
 
 
-def ingest_document(text: str, strategy: str = "fixed", chunk_args: Optional[Dict] = None,doc_name: str = None) -> List[str]:
+def ingest_document(text: str, strategy: str = "fixed", chunk_args: Optional[Dict] = None,doc_name: str = None, new_topics: Optional[List[str]] = None) -> List[str]:
     chunk_args = chunk_args or {}  # Safely handle default
     chunks = chunk_text(text, strategy, **chunk_args)
+    all_topics = load_known_topics()
     embeddings = embed_texts(chunks)
     doc_ids = []
 
     for chunk, vector in zip(chunks, embeddings):
         metadata = {"document_name": doc_name} if doc_name else {}
+
+        if new_topics:
+            for new_topic in new_topics:
+                if new_topic not in all_topics:
+                    all_topics.append(new_topic)
+                    add_new_topic(new_topic)
+
+        if all_topics:
+            metadata["topics"] = generate_metadata(chunk, list(set(all_topics)))
+
         doc_id = add_document(chunk, vector, metadata)  # Stores in Weaviate
         doc_ids.append(doc_id)
 
