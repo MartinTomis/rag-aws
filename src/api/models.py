@@ -11,6 +11,8 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: List[str]
+    document_names:  List[str]
+    scores: List[float]
 
 class QueryResult(BaseModel):
     id: str

@@ -1,9 +1,28 @@
+# Deployment guide
+## Local
+- commit repo
+- install requirements
+- prepare docker
+```
+docker-compose build
+docker-compose up
+
+```
+
+```
+uvicorn src.main:app --reload
+```
+
+
+
+
+
 ## TO DO:
 
 - Search - should be hybrid - vector and keyword/BM25 - DONE
 - Parsing of different documents - DONE
 - Batch processing
-- Similarity threshold - DONE - in function
+- Similarity threshold - DONE - in function, in API
 - metadata - Name in the file, name of the file, topics
 - metadata filtering and Faceted search (or faceted navigation) provides users with filterable categories (facets) to refine search results interactively.
 ### logging and correlation ID - middleware.
@@ -87,23 +106,37 @@ Edit
 def on_startup():
     init_schema()
 
-# Set Region
+
+# Local runs
+### V docker-compose upravit localhost.
+
+
+docker-compose up weaviate
+
+uvicorn src.main:app --reload
+
+(http://localhost:8000/docs)
+
+
+# Updates
+
+### Set Region
 aws configure set region eu-central-1
-# Authenticate (if needed)
+### Authenticate (if needed)
 aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 161015140575.dkr.ecr.eu-central-1.amazonaws.com
 
 docker build -t rag-aws-container:first .
-# Tag image
+### Tag image
 docker tag rag-aws-container:first 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
 
-# Push image
+### Push image
 docker push 161015140575.dkr.ecr.eu-central-1.amazonaws.com/rag-registry-v1
 
-# Register the tasks
+### Register the tasks
 aws ecs register-task-definition --cli-input-json file://deployment/weaviate-task.json
 aws ecs register-task-definition --cli-input-json file://deployment/rag-task.json
 
-# Update service
+### Update service
 aws ecs update-service \
   --cluster rag-ecs-cluster-1 \
   --service rag-app-service \
@@ -114,7 +147,7 @@ aws ecs update-service \
   --service weaviate-service \
   --task-definition weaviate-task
 
-# Force new deployment
+### Force new deployment
 aws ecs update-service \
   --cluster rag-ecs-cluster-1 \
   --service rag-app-service \

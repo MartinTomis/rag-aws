@@ -1,15 +1,7 @@
 from weaviate import connect_to_custom
-from weaviate.connect import ConnectionParams
-#from weaviate.collections.classes.config import Property, VectorIndexConfig, Vectorizer
-from weaviate.classes.config import Property
-from weaviate.classes.config import Configure
 from uuid import uuid4
-from weaviate import connect_to_custom, ConnectionParams
-import weaviate.classes.config as wc
 import os
-from weaviate import connect_to_custom
-from weaviate.connect import ConnectionParams
-from weaviate.classes.config import Property, Configure, DataType
+import weaviate.classes as wvc
 import weaviate.exceptions
 
 
@@ -18,17 +10,7 @@ def get_client():
     http_host = os.getenv("WEAVIATE_HTTP_HOST", "weaviate" if os.getenv("IN_DOCKER") else "localhost")
     http_port=int(os.getenv("WEAVIATE_HTTP_PORT", 8080))
     grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate.myapp.local" if os.getenv("IN_DOCKER") else "localhost")
-    #grpc_host = os.getenv("WEAVIATE_GRPC_HOST", "weaviate")
     grpc_port=int(os.getenv("WEAVIATE_GRPC_PORT", 50051))
-    #http_host = os.getenv("WEAVIATE_HTTP_HOST", "localhost")
-    #http_port = os.getenv("WEAVIATE_HTTP_PORT", "8080")
-    #grpc_host = os.getenv("WEAVIATE_GRPC_HOST", http_host)
-    #grpc_port = os.getenv("WEAVIATE_GRPC_PORT", "50051")
-
-    print("Connecting to Weaviate at:")
-    print(f"  HTTP: http://{http_host}:{http_port}")
-    print(f"  gRPC: {grpc_host}:{grpc_port}")
-
     return connect_to_custom(
         http_host=http_host,
         http_port=int(http_port),
@@ -45,20 +27,30 @@ def init_schema():
 
     client = get_client()
     try:
+        # Document class
         if "Document" not in client.collections.list_all():
             client.collections.create(
                 name="Document",
                 description="Stores ingested document chunks",
                 vectorizer_config=None,
                 properties=[
-                    Property(
-                        name="text",
-                        data_type=DataType.TEXT,
-                        description="Chunked text",
-                        skip_vectorization=True
-                    )
+                    wvc.config.Property(name="text",data_type=wvc.config.DataType.TEXT,description="Chunked text",skip_vectorization=True),
+                    wvc.config.Property(name="document_name",data_type=wvc.config.DataType.TEXT,description="File name",skip_vectorization=True),
+                    wvc.config.Property(name="topics",data_type=wvc.config.DataType.TEXT_ARRAY,description="Topics of the document",skip_vectorization=True),
+
                 ],
-                vector_index_config=Configure.VectorIndex.hnsw(),
+                vector_index_config=wvc.config.Configure.VectorIndex.hnsw(),
+            )
+        # Topic class
+        if "Topic" not in client.collections.list_all():
+            client.collections.create(
+                name="Topic",
+                description="Stores list of allowed/known topics",
+                vectorizer_config=None,
+                properties=[
+                    wvc.config.Property(name="name", data_type=wvc.config.DataType.TEXT, skip_vectorization=True)
+                ],
+                vector_index_config=wvc.config.Configure.VectorIndex.hnsw(),
             )
     finally:
         client.close()
@@ -89,7 +81,7 @@ def delete_document(doc_id: str) -> bool:
 
 
 def list_documents(limit: int = 100):
-    client = get_client()  # This returns a full Weaviate client, not just the collection
+    client = get_client()
     try:
         doc_collection = client.collections.get("Document")
         results = doc_collection.query.fetch_objects(limit=limit)
@@ -109,42 +101,32 @@ def list_documents(limit: int = 100):
         client.close()
 
 
-
-# https://docs.weaviate.io/weaviate/tutorials/query
-# https://docs.weaviate.io/weaviate/api/graphql/search-operators
-# https://docs.weaviate.io/weaviate/api/graphql/search-operators#hybrid
 '''
+# https://docs.weaviate.io/weaviate/api/graphql/search-operators#hybrid
 alpha can be any number from 0 to 1, defaulting to 0.75.
 alpha = 0 forces using a pure keyword search method (BM25)
 alpha = 1 forces using a pure vector search method
 alpha = 0.5 weighs the BM25 and vector methods evenly
 
 '''
-# https://docs.weaviate.io/weaviate/api/graphql/additional-properties
-def query_documents(query: str, vector: list[float], top_k: int = 5,min_score: float = 0.5):
-    client = get_client()  # assuming you have a helper like this
+def query_documents(query: str, vector: list[float], top_k: int = 5, alpha: float = 0.7, min_score: float = 0.5):
+    client = get_client() 
     try:
         doc_collection = client.collections.get("Document")
-        #results = doc_collection.query.near_vector(near_vector=vector,limit=top_k,return_properties=["text"],).with_additional("distance")
-        
-        #results = doc_collection.query.near_vector(vector).with_limit(top_k).with_fetch_vector().do()
-        print("NEAR VECTOR TYPE")
-
-
-        #results = doc_collection.query.near_vector(near_vector = vector, limit = top_k, distance = 0.7)
         ### Hybrid
-        results = doc_collection.query.hybrid(query = query,  vector = vector, limit = top_k, alpha = 0.7)
+        results = doc_collection.query.hybrid(query = query,  vector = vector, limit = top_k, alpha = alpha,return_metadata=wvc.query.MetadataQuery(score=True, explain_score=True))
 
         return [
             {
                 "id": obj.uuid,
                 "text": obj.properties["text"],
-                "score": 1.0 - obj.metadata.distance if obj.metadata.distance is not None else 0.0  # convert distance to similarity
+                "document_name": obj.properties["document_name"],
+                "score": obj.metadata.score if obj.metadata.score is not None else 0.0 
             }
             for obj in results.objects if (getattr(obj.metadata, "score", 0.0) or 0.0) >= min_score
             ]
     finally:
         client.close()
 
-def retrieve_docs(query: str, vector: list[float], top_k: int = 5, min_score: float = 0.5):
+def retrieve_docs(query: str, vector: list[float], top_k: int = 5, alpha: float = 0.7, min_score: float = 0.5):
     return query_documents(query, vector, top_k=top_k, min_score = min_score)

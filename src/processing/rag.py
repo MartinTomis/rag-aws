@@ -6,10 +6,9 @@ from src.storage.vector_db import query_documents as retrieve_docs
 from dotenv import load_dotenv
 import os
 load_dotenv()  # This will load variables from .env into os.environ
-from openai import OpenAI  # or any LLM SDK
 from openai import AzureOpenAI
 
-#client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # make sure it's set
+
 api_key=os.getenv("OPENAI_API_KEY")
 client = AzureOpenAI(
     api_key=api_key,
@@ -22,21 +21,25 @@ def generate_answer(query: str, context_chunks: list[str]) -> str:
     prompt = f"""Use the following context to answer the question:\n\n{context_text}\n\nQuestion: {query}"""
 
     response = client.chat.completions.create(
-        model="gpt-4",  # or "gpt-3.5-turbo"
+        model="gpt-4", 
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
 
 
 
-def query_with_generation(query: str, top_k: int = 5) -> dict:
+def query_with_generation(query: str, top_k: int = 5, alpha : float = 0.7, min_score: float = 0.5 ) -> dict:
     query_vector = embed_texts([query])[0]  # Convert query to vector
-    results = retrieve_docs(query, query_vector, top_k=top_k)
+    results = retrieve_docs(query, query_vector, top_k=top_k, alpha = alpha,  min_score = min_score)
     context_chunks = [doc["text"] for doc in results]
+    scores = [doc["score"] for doc in results]
+    document_names = [doc["document_name"] for doc in results]
     answer = generate_answer(query, context_chunks)
     return {
         "answer": answer,
-        "sources": [doc["text"] for doc in results] 
+        "sources": [doc["text"] for doc in results],
+        "scores": scores,
+        "document_names": document_names
     }
 
 
@@ -50,6 +53,38 @@ def chunk_text(text: str, strategy: str = "fixed", **kwargs) -> list[str]:
                                     stride=kwargs.get("stride", 256))
     else:
         raise ValueError(f"Unknown chunking strategy: {strategy}")
+    
+def generate_metadata(text: str, possible_topics: list[str]) -> list[str]:
+    """
+    Uses OpenAI to identify which of the possible topics are relevant to the input text.
+    Returns a list of matching topics.
+    """
+    prompt = f"""
+    You are a helpful assistant that tags documents with relevant topics.
+
+    Here is a list of possible topics:
+    {', '.join(possible_topics)}
+
+    Given the following document, return only the topics from the list that are clearly mentioned or relevant:
+
+    Document:
+    {text}
+
+    Respond with a JSON list of topics.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2  # to make responses more deterministic
+    )
+
+    import json
+    try:
+        return json.loads(response.choices[0].message.content.strip())
+    except json.JSONDecodeError:
+        return []
+
 
 def ingest_document(text: str, strategy: str = "fixed", chunk_args: Optional[Dict] = None,doc_name: str = None) -> List[str]:
     chunk_args = chunk_args or {}  # Safely handle default
