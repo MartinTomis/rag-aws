@@ -15,7 +15,7 @@ Implementation of Retrieval-Augmented Generation with:
 
 ## High-level solution architecture
 
-![alt text](https://github.com/MartinTomis/rag-aws/blob/main/aws-rag2.jpg)
+![alt text](https://github.com/MartinTomis/rag-aws/blob/main/architecture.jpg)
 
 ## Code structure
 <pre> 
