@@ -47,23 +47,12 @@ src
 
  </pre>
 
-- commit repo
-- install requirements
-- prepare docker
-```
-docker-compose build
-docker-compose up
-
-```
-
-```
-uvicorn src.main:app --reload
-```
 
 ## Deployment with CDK
-I your projects:
+In your projects:
 ```
-git pull https://github.com/MartinTomis/rag-aws
+git clone https://github.com/MartinTomis/rag-aws.git
+
 cd rag-aws
 python3 -m venv venv
 source venv/bin/activate
