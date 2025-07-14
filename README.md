@@ -56,6 +56,8 @@ git clone https://github.com/MartinTomis/rag-aws.git
 cd rag-aws
 python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
+
 ```
 
 In rag-aws/deployment/cdk/app.py, modify AWS account and region.
@@ -72,7 +74,7 @@ If everything goes smoothly, then:
 cdk deploy
 ```
 
-Then open via browser
+Then open via browser - it is the DNS of the application load balancer:
 http://<rag-alb-dns-name>/docs
 
 
