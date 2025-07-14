@@ -1,0 +1,10 @@
+deployment/cdk/.venv
+.venv
+cdk.out
+node_modules
+__pychache__
+*.pyc
+.git
+**/cdk.out
+**/.venv
+*.log

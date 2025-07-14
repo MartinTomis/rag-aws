@@ -1,3 +1,19 @@
+"""
+Utility functions for extracting text content from supported file types.
+
+Supports reading and parsing text from:
+- PDF files using PyPDF2 (one string per page)
+- JSON files (serialized and returned as a single formatted string)
+- Plain text files (.txt)
+
+
+All functions return a list of strings for consistency, even if only one string is returned.
+
+
+Author: Martin Tomis
+"""
+
+
 import json
 import pandas as pd
 from pathlib import Path

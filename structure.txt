@@ -1,0 +1,25 @@
+src
+├── api
+│   ├── __init__.py
+│   ├── documents.py
+│   ├── ingest.py
+│   ├── models.py
+│   ├── query.py
+│   └── routes.py
+├── main.py
+├── processing
+│   ├── chunking.py
+│   ├── embedding.py
+│   ├── file_parsing.py
+│   ├── nltk_data
+│   │   └── tokenizers
+│   │       └── punkt
+│   │           ├── PY3
+│   │           │   └── english.pickle
+│   │           ├── README
+│   │           └── english.pickle
+│   └── rag.py
+└── storage
+    └── vector_db.py
+
+8 directories, 15 files

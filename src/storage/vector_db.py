@@ -112,7 +112,7 @@ def delete_documents_by_name(doc_name: str) -> int:
             result = collection.data.delete_many(where=filter_obj)
             deleted_count = result.matches
             total_deleted += deleted_count
-            if deleted_count < 25:
+            if deleted_count < 100:
                 break  # No more matches
 
         return total_deleted 
@@ -183,6 +183,20 @@ alpha = 0.5 weighs the BM25 and vector methods evenly
 
 '''
 def query_documents(query: str, vector: list[float], top_k: int = 5, alpha: float = 0.7, min_score: float = 0.5,topics: Optional[List[str]] = None):
+    """
+    Performs a hybrid search over documents using a query string and vector embedding.
+
+    Parameters:
+    - query (str): The text query to search for.
+    - vector (list[float]): The vector representation of the query.
+    - top_k (int, optional): Number of top results to return. Defaults to 5.
+    - alpha (float, optional): Balance between keyword and vector search. Defaults to 0.7.
+    - min_score (float, optional): Minimum relevance score for returned documents. Defaults to 0.5.
+    - topics (List[str], optional): Optional list of topics to filter results.
+
+    Returns:
+    - List[dict]: A list of documents matching the query with text, name, and score.
+    """
     client = get_client() 
     try:
         doc_collection = client.collections.get("Document")
